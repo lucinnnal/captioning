@@ -30,7 +30,8 @@ pip install -r requirements.txt
 
 ## Drive Mini Sample
 [Download Drive Mini Sample](https://drive.google.com/drive/folders/1ZZfkhpWVY-U36Y5e62geOWX-euE2JpJx?usp=drive_link)
-Move downloaded data to original folder is mini-sample/
+
+Move downloaded data to original folder mini-sample/
 
 ## Run Captioning
 ```bash
