@@ -10,6 +10,7 @@ from transformers import AutoTokenizer, AutoModel
 from torchvision.transforms.functional import InterpolationMode
 
 # Utils
+# Each frame to tensor
 def build_transform(input_size, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
     MEAN, STD = mean, std
     transform = T.Compose([
@@ -35,6 +36,7 @@ def find_closest_aspect_ratio(aspect_ratio, target_ratios, width, height, image_
                 best_ratio = ratio
     return best_ratio
 
+# Single frame(image) to 448*448 tiles + Thumbnail
 def dynamic_preprocess(image, min_num=1, max_num=12, image_size=448, use_thumbnail=False):
     orig_width, orig_height = image.size
     aspect_ratio = orig_width / orig_height
@@ -73,6 +75,7 @@ def dynamic_preprocess(image, min_num=1, max_num=12, image_size=448, use_thumbna
         processed_images.append(thumbnail_img)
     return processed_images
 
+# Single image preprocess and dynamic porcessing
 def load_image(image_file, input_size=448, max_num=12):
     image = Image.open(image_file).convert('RGB')
     transform = build_transform(input_size=input_size)
@@ -81,7 +84,7 @@ def load_image(image_file, input_size=448, max_num=12):
     pixel_values = torch.stack(pixel_values)
     return pixel_values
 
-# video multi-round conversation
+# Get frame indices to extract (divide video into segments and extract frame in each segment)
 def get_index(bound, fps, max_frame, first_idx=0, num_segments=32):
     if bound:
         start, end = bound[0], bound[1]
@@ -96,10 +99,10 @@ def get_index(bound, fps, max_frame, first_idx=0, num_segments=32):
     ])
     return frame_indices
 
-# Video Load
+# Video Load + Tensorfy the frames (VideoReader?: )
 def load_video(video_path, bound=None, input_size=448, max_num=1, num_segments=32):
-    vr = VideoReader(video_path, ctx=cpu(0), num_threads=1)
-    max_frame = len(vr) - 1
+    vr = VideoReader(video_path, ctx=cpu(0), num_threads=1) 
+    max_frame = len(vr) - 1 # last frame index
     fps = float(vr.get_avg_fps())
 
     pixel_values_list, num_patches_list = [], []
@@ -107,10 +110,10 @@ def load_video(video_path, bound=None, input_size=448, max_num=1, num_segments=3
     frame_indices = get_index(bound, fps, max_frame, first_idx=0, num_segments=num_segments)
     for frame_index in frame_indices:
         img = Image.fromarray(vr[frame_index].asnumpy()).convert('RGB')
-        img = dynamic_preprocess(img, image_size=input_size, use_thumbnail=True, max_num=max_num)
+        img = dynamic_preprocess(img, image_size=input_size, use_thumbnail=True, max_num=max_num) # max_num=1, does not split into tiles for single image
         pixel_values = [transform(tile) for tile in img]
         pixel_values = torch.stack(pixel_values)
-        num_patches_list.append(pixel_values.shape[0])
+        num_patches_list.append(pixel_values.shape[0]) # how many tiles for each frame?
         pixel_values_list.append(pixel_values)
     pixel_values = torch.cat(pixel_values_list)
     return pixel_values, num_patches_list
@@ -118,11 +121,10 @@ def load_video(video_path, bound=None, input_size=448, max_num=1, num_segments=3
 def main(args):
     # Load Model
     max_memory = {
-    0: "17GiB",
-    1: "17GiB",
-    2: "17GiB",
-    3: "17GiB",
-    4: "17GiB"
+    0: "20GiB",
+    1: "20GiB",
+    2: "20GiB",
+    3: "20GiB"
     }
     model = AutoModel.from_pretrained(
         args.model_name,
@@ -131,15 +133,14 @@ def main(args):
         use_flash_attn=True,
         trust_remote_code=True,
         max_memory=max_memory,
-        device_map="auto").eval()
+        device_map='auto').eval()
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True, use_fast=False)
-    generation_config = dict(max_new_tokens=1024, do_sample=True)
-
-    """
-    # Thinking Mode On
-    R1_SYSTEM_PROMPT = "You are an AI assistant that rigorously follows this response protocol: 1. First, conduct a detailed analysis of the question. Consider different angles, potential solutions, and reason through the problem step-by-step. Enclose this entire thinking process within <think> and </think> tags. 2. After the thinking section, provide a clear, concise, and direct answer to the user's question. Separate the answer from the think section with a newline. Ensure that the thinking process is thorough but remains focused on the query. The final answer should be standalone and not reference the thinking section.".strip()
-    model.system_message = R1_SYSTEM_PROMPT
-    """
+    generation_config = dict(max_new_tokens=1024, do_sample=True) # sampling False?
+    breakpoint()
+    # Thinking Mode (system prompt)
+    if args.use_sys_prompt:
+        R1_SYSTEM_PROMPT = args.sys_prompt.strip()
+        model.system_message = R1_SYSTEM_PROMPT
 
     with open(args.input_json_path, 'r') as f:
         video_paths = json.load(f)["video_paths"]
@@ -151,7 +152,21 @@ def main(args):
             pixel_values = pixel_values.to(torch.bfloat16).cuda()
             video_prefix = ''.join([f'Frame{i + 1}: <image>\n' for i in range(len(num_patches_list))])
             question = video_prefix + args.question_suffix
-            
+            """
+            For 8 frames
+            Question be like..
+            Frame1: <image>
+            Frame2: <image>
+            Frame3: <image>
+            Frame4: <image>
+            Frame5: <image>
+            Frame6: <image>
+            Frame7: <image>
+            Frame8: <image>
+            Describe this video in detail.
+
+            <image> 자리에 해당 프레임의 visual embedding을 뽑아내고, connector(projector)로 LLM 차원에 맞게 매핑한 image embedding(시퀀스)이 추가(삽입)되어 LLM으로 들어갑니다.
+            """
             response, history = model.chat(tokenizer, pixel_values, question, generation_config,
                                            num_patches_list=num_patches_list, history=None, return_history=True)
             
@@ -165,12 +180,13 @@ def main(args):
         json.dump(results, f, indent=4)
     print(f"Results saved to {args.output_json_path}")
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", type=str, default="OpenGVLab/InternVL3_5-4B", help="The name of the model to use.")
-    parser.add_argument("--input-json-path", type=str, required=True, help="Path to the input JSON file containing video paths.", default="example_video_paths.json")
-    parser.add_argument("--output-json-path", type=str, required=True, help="Path to the output JSON file to save the results.", default="output.json")
+    parser.add_argument("--model-name", type=str, default="OpenGVLab/InternVL3_5-8B", help="The name of the model to use.")
+    parser.add_argument("--input-json-path", type=str, required=True, help="Path to the input JSON file containing video paths.")
+    parser.add_argument("--output-json-path", type=str, required=True, help="Path to the output JSON file to save the results.")
+    parser.add_argument("--use-sys-prompt", type=bool, default=False, help="Use system prompt?")
+    parser.add_argument("--sys-prompt", type=str, help="System prompt", default = "You are an AI assistant that rigorously follows this response protocol: 1. First, conduct a detailed analysis of the question. Consider different angles, potential solutions, and reason through the problem step-by-step. Enclose this entire thinking process within <think> and </think> tags. 2. After the thinking section, provide a clear, concise, and direct answer to the user's question. Separate the answer from the think section with a newline. Ensure that the thinking process is thorough but remains focused on the query. The final answer should be standalone and not reference the thinking section.")
     parser.add_argument("--question-suffix", type=str, help="Suffix to append to the question.", default = 'Describe this video in detail.')
     args = parser.parse_args()
     main(args)

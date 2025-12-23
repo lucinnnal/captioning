@@ -1,4 +1,8 @@
 transformers>=4.55.0
+accelerate
+einops
+timm
 numpy
 pillow
 decord
+gdown

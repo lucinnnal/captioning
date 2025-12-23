@@ -1,0 +1,6 @@
+# Ignore datas
+data/*
+!data/.gitkeep
+
+mini-sample/*
+!mini-sample/.gitkeep
