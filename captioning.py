@@ -136,7 +136,6 @@ def main(args):
         device_map='auto').eval()
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True, use_fast=False)
     generation_config = dict(max_new_tokens=1024, do_sample=True) # sampling False?
-    breakpoint()
     # Thinking Mode (system prompt)
     if args.use_sys_prompt:
         R1_SYSTEM_PROMPT = args.sys_prompt.strip()
