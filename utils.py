@@ -2,7 +2,7 @@
 import os
 import json
 
-def create_video_paths_json(data_dir='mini-sample', output_json='example_video_paths.json'):
+def create_video_paths_json(data_dir='mini-sample', output_json='input_video_paths.json'):
     """
     Scans a directory for video files and saves their paths to a JSON file.
 

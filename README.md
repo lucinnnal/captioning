@@ -28,10 +28,9 @@ python -c "import torch; print(torch.__version__, torch.cuda.is_available()); pr
 pip install -r requirements.txt
 ```
 
-## Drive Mini Benchmark download
-```bash
-gdown https://drive.google.com/uc?id=1bhHxKhfrvTWTZY4AYT8G2Vkau2Y3nyzW
-```
+## Drive Mini Sample
+[Download Drive Mini Sample](https://drive.google.com/drive/folders/1ZZfkhpWVY-U36Y5e62geOWX-euE2JpJx?usp=drive_link)
+Original folder is mini-sample/
 
 ## Run Captioning
 ```bash
@@ -75,7 +74,7 @@ echo "Running captioning with CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
 #
 python captioning.py \
    --model-name "OpenGVLab/InternVL3_5-38B" \
-   --input-json-path example_video_paths.json \
+   --input-json-path input_video_paths.json \
    --output-json-path output_captions.json \
    --use-sys-prompt False \
    --sys-prompt "You are an AI assistant that rigorously follows this response protocol: 1. First, conduct a detailed analysis of the question. Consider different angles, potential solutions, and reason through the problem step-by-step. Enclose this entire thinking process within <think> and </think> tags. 2. After the thinking section, provide a clear, concise, and direct answer to the user's question. Separate the answer from the think section with a newline. Ensure that the thinking process is thorough but remains focused on the query. The final answer should be standalone and not reference the thinking section." \
