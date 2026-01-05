@@ -5,6 +5,9 @@ data/*
 mini-sample/*
 !mini-sample/.gitkeep
 
+ori-mini-sample/*
+!ori-mini-sample/.gitkeep
+
 # Ignore Output
 ./output_captions_with_thinking.json
 ./output_captions.json
